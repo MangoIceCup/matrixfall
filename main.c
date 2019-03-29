@@ -8,11 +8,11 @@
 #include <unistd.h>
 #include <locale.h>
 #include <wchar.h>
+#include <math.h>
 
 typedef struct _Item {
-    char *stringToBeShow;
+    wchar_t *stringToBeShow;
     short int nextPosition;
-    short int currentPostion;
 } Col;
 
 
@@ -20,29 +20,25 @@ int lengthOfCols;
 int lengthOfLines;
 Col *Cols;
 
-int sizeOfString = 0;
-char **sentences;
+int countOfString = 0;
+wchar_t **sentences;
+wchar_t *allSetneces;
+
+wchar_t **terminalBuffer;
 
 
 int loadString(const char *fileName) {
     FILE *file = fopen(fileName, "r");
-    int i = 0;
     if (file == NULL) {
         return 0;
     }
-    Node *strings = NULL;
-    char *string = NULL;
-    while (EOF != readNextString(file, &string)) {
-        linkArrayAppend(&strings, string);
+    if (countOfString = readAllLinesW(file, &sentences, &allSetneces)) {
+        fclose(file);
+        return 1;
+    } else {
+        fclose(file);
+        return 0;
     }
-    fclose(file);
-    sizeOfString = linkArraryLength(strings);
-    char *p[10];
-    sentences = (char **) malloc(sizeof(char *) * sizeOfString);
-    for (i = 0; i < sizeOfString; i++) {
-        sentences[i] = linkArrayGet(strings, i);
-    }
-    linkArraryDestroy(strings);
 }
 
 void RewardNumberOfColums() {
@@ -53,7 +49,7 @@ void RewardNumberOfColums() {
     stream = popen("tput cols", "r");
     fscanf(stream, "%s\n", buf);
     fclose(stream);
-    lengthOfCols = atoi(buf);
+    lengthOfCols = atoi(buf) / 2;
 
     stream = popen("tput lines", "r");
     fscanf(stream, "%s\n", buf);
@@ -61,83 +57,102 @@ void RewardNumberOfColums() {
     lengthOfLines = atoi(buf);
 }
 
+void createTerminalBuffer(wchar_t ***screenBuffer, int rows, int colums) {
+    *screenBuffer = (wchar_t **) malloc(sizeof(wchar_t *) * rows);
+    memset(*screenBuffer, 0, sizeof(wchar_t *) * rows);
+    for (int i = 0; i < rows; i++) {
+        wchar_t *p = (wchar_t *) malloc(sizeof(wchar_t) * colums);
+        memset(p, 0, sizeof(wchar_t) * colums);
+        (*screenBuffer)[i] = p;
 
-void checkAndResetRandomString() {
-    srand(time(0));
-    for (int i = 0; i < lengthOfCols; i++) {
-        if (Cols[i].stringToBeShow == 0 || strlen(Cols[i].stringToBeShow) == Cols[i].nextPosition) {
-            if (i % 5 == 0) {
-                Cols[i].stringToBeShow = sentences[rand() % sizeOfString];
-                Cols[i].nextPosition = -(rand() % 8);
-            } else {
-                Cols[i].stringToBeShow = 0;
-            }
-        }
     }
 }
 
-char *readAllByteFromFile(FILE *file, int *length);
+void displayScreenBuffer(wchar_t **screenBuffer, int rows, int colums) {
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < colums; j++) {
+            wchar_t ch = screenBuffer[i][j];
+            // wprintf(L"(%d,%d):", i, j);
+            // printBinary4(ch);
+            if (ch == ' ' || ch == 0) {
+                putwchar(' ');
+                putwchar(' ');
+            } else if (ch < 128) {
+                putwchar(ch);
+                putwchar(' ');
+            } else {
+                putwchar(ch);
+            }
+        }
+        putwchar('\n');
+    }
+    fflush(stdout);
+}
 
-int xmain(int argumentsNumber, char *arguments[]) {
-    int col_i = 0, row_i = 0;
+void updateScreenBuffer(wchar_t **screenBuffer, int rows, int colums, Col *cols) {
+    for (int i = 0; i < colums; i++) {
+        if (cols[i].stringToBeShow == 0) {
+            screenBuffer[rows - 1][i] = 0;
+        } else {
+            if (cols[i].nextPosition < 0) {
+                screenBuffer[rows - 1][i] = 0;
+                cols[i].nextPosition++;
+            } else {
+                screenBuffer[rows - 1][i] = cols[i].stringToBeShow[cols[i].nextPosition++];
+            }
+        }
+    }
+    wchar_t *lastRow = screenBuffer[rows - 1];
+    for (int i = rows - 1; i > 0; i--) {
+        screenBuffer[i] = screenBuffer[i - 1];
+    }
+    screenBuffer[0] = lastRow;
+}
+
+int countOfValidCol(Col const *cols, const int lengthOfCols) {
+    int result = 0;
+    for (int i = 0; i < lengthOfCols; i++) {
+        if (cols[i].stringToBeShow != 0 && wcslen(cols[i].stringToBeShow) != cols[i].nextPosition) {
+            result++;
+        }
+    }
+    return result;
+}
+
+void checkAndResetRandomString(Col *cols, int const lengthOfCols, wchar_t **const sentences, int countOfSentences) {
+    srand(time(0));
+    for (int i = 0; i < lengthOfCols; i++) {
+        if (cols[i].stringToBeShow != 0 && wcslen(cols[i].stringToBeShow) == cols[i].nextPosition) {
+            cols[i].stringToBeShow = 0;
+            cols[i].nextPosition = 0;
+        }
+    }
+    while (countOfValidCol(cols, lengthOfCols) < (int) ceil(0.4 * lengthOfCols)) {
+        int randomIndex = 0;
+        for (randomIndex = rand() % lengthOfCols;
+             cols[randomIndex].stringToBeShow != 0;
+             randomIndex = rand() % lengthOfCols);
+        cols[randomIndex].stringToBeShow = sentences[rand() % countOfSentences];
+        cols[randomIndex].nextPosition = -(abs(rand() % 6)+6);
+    }
+}
 
 
+int main(int argumentsNumber, char *arguments[]) {
+    setlocale(LC_ALL, "");
     loadString("/home/edward/CLionProjects/NoResponseServer/msg.txt");
     RewardNumberOfColums();
     Cols = (Col *) malloc(sizeof(Col) * lengthOfCols);
     memset(Cols, 0, sizeof(Col) * lengthOfCols);
+    createTerminalBuffer(&terminalBuffer, lengthOfLines, lengthOfCols);
     while (1) {
         system("clear");
-        checkAndResetRandomString();
-        for (int i = 0; i < lengthOfCols; i++) {
-            Cols[i].currentPostion = Cols[i].nextPosition;
-        }
-        for (row_i = 0; row_i < lengthOfLines; row_i++) {
-            for (col_i = 0; col_i < lengthOfCols; col_i++) {
-                char ch;
-                if (Cols[col_i].stringToBeShow != NULL) {
-                    if (Cols[col_i].currentPostion < 0) {
-                        ch = ' ';
-                    } else {
-                        ch = Cols[col_i].stringToBeShow[Cols[col_i].currentPostion];
-                        Cols[col_i].currentPostion--;
-                    }
-                } else {
-                    ch = ' ';
-                }
-                putchar(ch);
-            }
-            putchar('\n');
-        }
-        for (int i = 0; i < lengthOfCols; i++) {
-            Cols[i].nextPosition = Cols[i].nextPosition + 1;
-        }
-        usleep(150000);
-    }
-    //return 0;
-}
-
-void main(void) {
-    setlocale(LC_ALL,"");
-    const char *txtFilePath = "/home/edward/CLionProjects/NoResponseServer/msg.txt";
-    int lengthOfFile = 0;
-    unsigned char *bytesOfFile;
-    int lengthOfWC=0;
-    wchar_t * codepointsFromFile;
-
-    FILE *file = fopen(txtFilePath, "rb");
-    bytesOfFile = readAllByteFromFile(file, &lengthOfFile);
-    fclose(file);
-
-    if (bytesOfFile) {
-        bytesOfFile = realloc(bytesOfFile, lengthOfFile + 1);
-        bytesOfFile[lengthOfFile]='\0';
-        lengthOfWC = mbstowcs(NULL, bytesOfFile, lengthOfFile+1);
-        codepointsFromFile=(wchar_t *)malloc(sizeof(wchar_t)*(lengthOfWC+1));
-        mbstowcs(codepointsFromFile,bytesOfFile,lengthOfFile+1);
-        free(bytesOfFile);
-        wprintf(L"%ls",codepointsFromFile);
+        checkAndResetRandomString(Cols, lengthOfCols, sentences, countOfString);
+        updateScreenBuffer(terminalBuffer, lengthOfLines, lengthOfCols, Cols);
+        displayScreenBuffer(terminalBuffer, lengthOfLines, lengthOfCols);
+        usleep(180000);
     }
 }
+
 
 

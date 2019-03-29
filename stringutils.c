@@ -2,11 +2,11 @@
 // Created by edward on 19-3-26.
 //
 
+#include <wchar.h>
 #include "stringutils.h"
-#include <stdlib.h>
 #include "linkedarray.h"
 
-int readAllLinesW(FILE *fileDesc, wchar_t ***lines,wchar_t **buffer) {
+int readAllLinesW(FILE *fileDesc, wchar_t ***lines, wchar_t **buffer) {
     int lengthOfFile = 0;
     unsigned char *bytesOfFile;
     int lengthOfWC = 0;
@@ -20,7 +20,7 @@ int readAllLinesW(FILE *fileDesc, wchar_t ***lines,wchar_t **buffer) {
     codepointsFromFile = (wchar_t *) malloc(sizeof(wchar_t) * (lengthOfWC + 1));
     mbstowcs(codepointsFromFile, bytesOfFile, lengthOfFile + 1);
     free(bytesOfFile);
-    *buffer=codepointsFromFile;
+    *buffer = codepointsFromFile;
     {
         Node *ptrHead = 0;
         int index = 0;
@@ -36,7 +36,7 @@ int readAllLinesW(FILE *fileDesc, wchar_t ***lines,wchar_t **buffer) {
             }
 
             linkArrayAppend(&ptrHead, codepointsFromFile + index);
-            while (codepointsFromFile[index] != '\r' || codepointsFromFile[index] != '\n' ||
+            while (codepointsFromFile[index] != '\r' && codepointsFromFile[index] != '\n' &&
                    codepointsFromFile[index] != 0) {
                 index++;
             }
@@ -46,22 +46,22 @@ int readAllLinesW(FILE *fileDesc, wchar_t ***lines,wchar_t **buffer) {
             codepointsFromFile[index] = 0;
             index++;
         }
-        if(ptrHead==0){
-            *buffer=0;
-            *lines=0;
+        if (ptrHead == 0) {
+            *buffer = 0;
+            *lines = 0;
             return 0;
-        }else{
-            int countOfValidLine=linkArraryLength(ptrHead);
-            Node *temp_ptrHead=ptrHead;
-            int index=0;
-            *lines=(wchar_t **)malloc(sizeof(wchar_t *)*countOfValidLine);
-            while (temp_ptrHead!=NULL){
-                (*lines)[index]=(wchar_t *)temp_ptrHead->data;
-                temp_ptrHead=temp_ptrHead->next;
+        } else {
+            int countOfValidLine = linkArraryLength(ptrHead);
+            Node *temp_ptrHead = ptrHead;
+            int index = 0;
+            *lines = (wchar_t **) malloc(sizeof(wchar_t *) * countOfValidLine);
+            while (temp_ptrHead != NULL) {
+                (*lines)[index] = (wchar_t *) temp_ptrHead->data;
+                temp_ptrHead = temp_ptrHead->next;
                 index++;
             }
             linkArraryDestroy(ptrHead);
-            return 1;
+            return index;
         }
     }
 
@@ -153,4 +153,12 @@ char *readAllByteFromFile(FILE *file, int *length) {
     buffer = realloc(buffer, nextInnerIndexToWrite);
     *length = nextInnerIndexToWrite;
     return buffer;
+}
+
+void printBinary4(int ch) {
+    unsigned int p = 0x80000000;
+    while (p) {
+        p & ch ? putwchar('1') : putwchar('0');
+        p >>= 1;
+    }
 }
